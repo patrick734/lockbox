@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lockbox</title>
+<meta name="description" content="Lock tokens and liquidity on BOT Chain, and check whether any token's supply is locked.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<style>
+:root{
+  --paper:#F2F3F6; --card:#FFFFFF; --ink:#152238; --muted:#5B6578; --rule:#D5D9E2;
+  --brass:#A8751A; --brass-ink:#FFFFFF; --soft:#E8EAF0; --open:#2F7D5B; --warn:#B4442E;
+  --serif:"Instrument Serif",Georgia,serif; --sans:"Instrument Sans",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{--paper:#0E1524;--card:#151E30;--ink:#E7EBF3;--muted:#98A3B8;--rule:#27324A;--brass:#D9A441;--brass-ink:#1A1204;--soft:#1C2740;--open:#5CC193;--warn:#EB8770}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+
+.top{display:flex;align-items:center;gap:14px;padding:14px 24px;flex-wrap:wrap;border-bottom:1px solid var(--rule)}
+.logo{display:flex;align-items:center;gap:10px;margin-right:auto;font:400 28px/1 var(--serif)}
+.who{font-size:14px;color:var(--muted)} .who b{color:var(--ink);font-weight:600}
+.bad{color:var(--warn);font-weight:600}
+.btn{border:1.5px solid var(--ink);background:transparent;padding:8px 15px;border-radius:8px;cursor:pointer;font-weight:600;font-size:15px}
+.btn:hover{background:var(--ink);color:var(--paper)}
+.btn.primary{background:var(--brass);border-color:var(--brass);color:var(--brass-ink)}
+.btn.primary:hover{filter:brightness(1.07);background:var(--brass);color:var(--brass-ink)}
+.btn.quiet{border-color:var(--rule)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+nav.tabs{max-width:1040px;margin:0 auto;padding:18px 24px 0;display:flex;gap:4px;flex-wrap:wrap}
+.tab{border:0;background:transparent;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600;color:var(--muted)}
+.tab[aria-selected=true]{background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 1px var(--rule)}
+main{max-width:1040px;margin:0 auto;padding:12px 24px 72px}
+@media (max-width:720px){nav.tabs{padding:14px 16px 0}main{padding:10px 16px 56px}.top{padding:12px 16px}}
+
+h1{font:400 clamp(44px,7vw,76px)/1 var(--serif);letter-spacing:-.01em;margin:22px 0 10px;max-width:15ch}
+h1 i{font-style:italic}
+.lede{color:var(--muted);max-width:60ch;margin:0 0 22px;font-size:17px}
+h2{font:400 32px/1.1 var(--serif);margin:0 0 6px}
+.panel{background:var(--card);border:1px solid var(--rule);border-radius:12px;padding:22px}
+
+.search{display:flex;gap:10px;flex-wrap:wrap}
+.search input{flex:1 1 360px;min-width:0}
+.field{width:100%;padding:11px 13px;border:1.5px solid var(--rule);border-radius:8px;background:var(--paper)}
+.field:focus{border-color:var(--ink);outline:none}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;overflow-wrap:anywhere;word-break:break-all}
+label{display:block;font-size:14px;font-weight:600;margin:16px 0 6px}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.row{grid-template-columns:1fr}}
+
+/* token verdict: the one memorable element */
+.verdict{display:grid;grid-template-columns:auto 1fr;gap:6px 28px;align-items:end;margin:22px 0 8px}
+@media (max-width:620px){.verdict{grid-template-columns:1fr}}
+.big{font:400 clamp(64px,12vw,120px)/.85 var(--serif);letter-spacing:-.02em}
+.big small{font-size:.38em;margin-left:2px}
+.vmeta{color:var(--muted);font-size:15px;padding-bottom:8px}
+.vmeta b{color:var(--ink)}
+.tokname{font-weight:700;font-size:18px;color:var(--ink);display:block;margin-bottom:4px}
+
+.locks{display:grid;gap:12px;margin-top:20px}
+.lock{border:1px solid var(--rule);border-radius:10px;padding:16px 18px;background:var(--card)}
+.lock-h{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.lock-h .amt{font:400 26px/1.1 var(--serif)}
+.lock-h .lbl{color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+.kind{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--muted);white-space:nowrap}
+.tl{position:relative;height:10px;background:var(--soft);border-radius:999px;margin:14px 0 8px}
+.tl .done{position:absolute;inset:0 auto 0 0;border-radius:999px;background:var(--brass)}
+.tl .now{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--ink)}
+.tl-l{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.tl-l b{color:var(--ink)}
+.state-open{color:var(--open);font-weight:700}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.acts input{flex:1 1 180px;min-width:0;padding:8px 11px}
+.empty{padding:36px 20px;text-align:center;color:var(--muted);border:1.5px dashed var(--rule);border-radius:10px;margin-top:18px}
+
+.seg{display:flex;gap:8px;flex-wrap:wrap}
+.seg label{margin:0;display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1.5px solid var(--rule);border-radius:8px;cursor:pointer;font-weight:500;flex:1 1 220px}
+.seg label:has(input:checked){border-color:var(--ink)}
+.seg input{margin-top:4px}
+.seg b{display:block}
+.tokbox{margin-top:10px;font-size:14px;color:var(--muted)}
+.tokbox b{color:var(--ink)}
+.amtrow{display:flex;gap:8px}
+.amtrow input{flex:1;min-width:0}
+.steps{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+
+.foot{border-top:1px solid var(--rule);background:var(--card)}
+.foot-in{max-width:1040px;margin:0 auto;padding:28px 24px 36px;display:flex;flex-wrap:wrap;gap:20px 56px;align-items:center}
+@media (max-width:720px){.foot-in{padding:24px 16px 32px}}
+.foot-label{margin:0;font-size:13px;color:var(--muted)}
+.foot-name{margin:2px 0 0;font:400 32px/1 var(--serif)}
+.foot-links{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:15px}
+.foot-links a{font-weight:600;overflow-wrap:anywhere}
+
+dialog{border:1px solid var(--rule);border-radius:12px;background:var(--card);color:var(--ink);padding:22px;width:min(380px,calc(100% - 32px))}
+dialog::backdrop{background:rgba(8,14,26,.55)}
+.wallets{display:grid;gap:8px;margin:10px 0 6px}
+.wbtn{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border:1.5px solid var(--rule);border-radius:8px;background:var(--paper);cursor:pointer;font-weight:600;text-align:left}
+.wbtn:hover{border-color:var(--ink)}
+.wbtn img{border-radius:6px}
+.wicon{width:28px;height:28px;border-radius:6px;background:var(--rule);display:inline-block}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:12px 18px;border-radius:10px;max-width:min(560px,calc(100% - 32px));font-size:15px;box-shadow:0 10px 30px rgba(0,0,0,.25);display:none;z-index:10}
+.toast.show{display:block}
+.toast a{color:var(--brass);font-weight:700}
+@media (prefers-reduced-motion:no-preference){.toast.show{animation:up .2s ease-out}@keyframes up{from{opacity:0;transform:translate(-50%,8px)}}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="logo">
+    <svg width="26" height="28" viewBox="0 0 26 28" aria-hidden="true"><path d="M7 12V8a6 6 0 0 1 12 0v4" fill="none" stroke="currentColor" stroke-width="2.4"/><rect x="2" y="12" width="22" height="15" rx="3" fill="var(--brass)"/><circle cx="13" cy="19" r="2.2" fill="var(--card)"/></svg>
+    Lockbox
+  </div>
+  <span class="who" id="who">Not connected</span>
+  <button class="btn primary" id="connect">Connect wallet</button>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Sections">
+  <button class="tab" role="tab" aria-selected="true" aria-controls="pCheck" id="tCheck">Check a token</button>
+  <button class="tab" role="tab" aria-selected="false" aria-controls="pLock" id="tLock">Lock tokens</button>
+  <button class="tab" role="tab" aria-selected="false" aria-controls="pMine" id="tMine">My locks</button>
+</nav>
+
+<main>
+  <!-- CHECK -->
+  <section id="pCheck" role="tabpanel" aria-labelledby="tCheck">
+    <h1>Is it <i>locked?</i></h1>
+    <p class="lede">Paste a token or LP token address to see how much of its supply is locked in Lockbox, and when each lock opens. Locked tokens can't be withdrawn early by anyone, including us.</p>
+    <form class="search" id="checkForm">
+      <input class="field mono" id="checkAddr" placeholder="0x… token or LP address" aria-label="Token address" autocomplete="off" spellcheck="false">
+      <button class="btn primary" type="submit">Check</button>
+    </form>
+    <div id="checkOut"></div>
+  </section>
+
+  <!-- LOCK -->
+  <section id="pLock" role="tabpanel" aria-labelledby="tLock" hidden>
+    <h1>Lock tokens</h1>
+    <p class="lede">Lock your project's tokens or liquidity so holders can see it can't be pulled. You keep the right to withdraw once the lock opens; until then, nobody can move them.</p>
+    <form class="panel" id="lockForm">
+      <label for="lToken">Token or LP token address</label>
+      <input class="field mono" id="lToken" placeholder="0x…" autocomplete="off" spellcheck="false" required>
+      <div class="tokbox" id="tokBox"></div>
+
+      <label for="lAmt">Amount</label>
+      <div class="amtrow"><input class="field" id="lAmt" type="number" min="0" step="any" required placeholder="0"><button class="btn quiet" type="button" id="maxBtn">Max</button></div>
+
+      <div class="row">
+        <div><label for="lDate">Unlocks on</label><input class="field" id="lDate" type="datetime-local" required></div>
+        <div><label for="lLabel">Label (optional)</label><input class="field" id="lLabel" maxlength="120" placeholder="Liquidity, team tokens…"></div>
+      </div>
+
+      <label>How it unlocks</label>
+      <div class="seg">
+        <label><input type="radio" name="kind" value="cliff" checked><span><b>All at once</b>Everything opens on the unlock date.</span></label>
+        <label><input type="radio" name="kind" value="linear"><span><b>Gradually</b>Opens evenly from today until the unlock date.</span></label>
+      </div>
+
+      <p class="hint" id="lockHint">Locking costs a flat fee in BOT plus gas. You can push the unlock date later, but never earlier.</p>
+      <div class="steps">
+        <button class="btn" type="button" id="approveBtn" disabled>1. Approve</button>
+        <button class="btn primary" type="submit" id="lockBtn" disabled>2. Lock</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- MINE -->
+  <section id="pMine" role="tabpanel" aria-labelledby="tMine" hidden>
+    <h1>My locks</h1>
+    <p class="lede">Withdraw what has opened, push an unlock date later, or hand a lock to another wallet.</p>
+    <div id="mineOut"><div class="empty">Connect your wallet to see your locks.</div></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <div><p class="foot-label">Built on</p><p class="foot-name">BOT Chain</p></div>
+    <ul class="foot-links">
+      <li>BOT Chain official website: <a href="https://botchain.ai" target="_blank" rel="noopener">https://botchain.ai</a></li>
+      <li>BOT Chain Explorer: <a href="https://scan.botchain.ai" target="_blank" rel="noopener">https://scan.botchain.ai</a></li>
+      <li id="contractLi">Lockbox contract: <a id="contractLink" class="mono" href="https://scan.botchain.ai" target="_blank" rel="noopener"></a></li>
+    </ul>
+  </div>
+</footer>
+
+<dialog id="walletDlg" aria-labelledby="walletH">
+  <h2 id="walletH">Choose a wallet</h2>
+  <div id="walletList" class="wallets"></div>
+  <p class="hint">Any EVM wallet works. Your wallet will ask to switch to BOT Chain if needed.</p>
+  <div class="steps"><button class="btn quiet" id="walletCancel" type="button">Cancel</button></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const CONFIG = {
+  contract: "", // set after deploying Lockbox
+  chainId: 677,
+  chainName: "BOT Chain",
+  explorer: "https://scan.botchain.ai",
+  rpc: "", // optional public BOT Chain RPC so visitors can check tokens without a wallet
+};
+const ABI = [
+  "function lockFee() view returns (uint256)",
+  "function lockCount() view returns (uint256)",
+  "function getLock(uint256) view returns (tuple(address token,uint40 start,uint40 unlock,bool linear,address owner,uint128 amount,uint128 withdrawn,uint128 vestedBase,string label))",
+  "function withdrawable(uint256) view returns (uint256)",
+  "function stillLocked(uint256) view returns (uint256)",
+  "function locksOfToken(address) view returns (uint256[])",
+  "function locksOfOwner(address) view returns (uint256[])",
+  "function lock(address,uint256,uint40,bool,string) payable returns (uint256)",
+  "function withdraw(uint256)",
+  "function extend(uint256,uint40)",
+  "function transferLock(uint256,address)",
+];
+const ERC20 = [
+  "function name() view returns (string)", "function symbol() view returns (string)", "function decimals() view returns (uint8)",
+  "function totalSupply() view returns (uint256)", "function balanceOf(address) view returns (uint256)",
+  "function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)",
+];
+
+const S = { browser:null, signer:null, me:null, read:null, write:null, provider:null, fee:0n, tok:null };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const short = (a) => a ? a.slice(0,6) + "…" + a.slice(-4) : "";
+const same = (a,b) => a && b && a.toLowerCase() === b.toLowerCase();
+const nowS = () => Math.floor(Date.now()/1000);
+function fmt(v, dec){ const n = Number(ethers.formatUnits(v, dec)); return n >= 1e6 ? n.toLocaleString(undefined,{maximumFractionDigits:0}) : n.toLocaleString(undefined,{maximumFractionDigits:4}); }
+function date(ts){ return new Date(ts*1000).toLocaleString(undefined,{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }
+function until(ts){ const d = ts - nowS(); if (d <= 0) return null; if (d < 3600) return `${Math.ceil(d/60)} min`; if (d < 86400) return `${Math.round(d/3600)} h`; if (d < 86400*60) return `${Math.round(d/86400)} days`; if (d < 86400*730) return `${Math.round(d/86400/30.4)} months`; return `${(d/86400/365).toFixed(1)} years`; }
+let tt;
+function toast(html, ms = 5000){ const t = $("toast"); t.innerHTML = html; t.classList.add("show"); clearTimeout(tt); if (ms) tt = setTimeout(() => t.classList.remove("show"), ms); }
+function errMsg(e){
+  const m = e?.shortMessage || e?.info?.error?.message || e?.message || String(e);
+  if (/user rejected|ACTION_REJECTED/i.test(m)) return "You cancelled the transaction in your wallet.";
+  if (/insufficient funds/i.test(m)) return "Not enough BOT in your wallet for the fee plus gas.";
+  if (/could not coalesce|failed to fetch/i.test(m)) return `Couldn't reach ${CONFIG.chainName}. Check your connection and that your wallet is on ${CONFIG.chainName}.`;
+  const k = { WrongFee:"The lock fee changed. Refresh the page and try again.", InvalidParams:"Something isn't valid. Check the amount and unlock date.",
+    NotLockOwner:"Only the wallet that owns this lock can do that.", NothingUnlocked:"Nothing has unlocked yet.", EnforcedPause:"New locks are paused right now.",
+    "ERC20InsufficientAllowance":"Approve the tokens first (step 1).", "ERC20InsufficientBalance":"You don't have that many tokens." };
+  for (const x in k) if (m.includes(x)) return k[x];
+  return m.length > 180 ? m.slice(0,180) + "…" : m;
+}
+async function send(label, fn, after){
+  if (!S.write) { toast("Connect your wallet first."); return false; }
+  if (!(await onRightChain())) { toast(`Switch your wallet to ${CONFIG.chainName} first.`); return false; }
+  try {
+    toast(`${label}: confirm in your wallet…`, 0);
+    const tx = await fn();
+    toast(`${label}: waiting for the network… <a href="${CONFIG.explorer}/tx/${tx.hash}" target="_blank" rel="noopener">View</a>`, 0);
+    await tx.wait();
+    if (after) await after();
+    toast(`${label}: done. <a href="${CONFIG.explorer}/tx/${tx.hash}" target="_blank" rel="noopener">View</a>`);
+    return true;
+  } catch (e) { toast(errMsg(e), 8000); return false; }
+}
+
+// ---------------- wallets (EIP-6963) ----------------
+const WALLETS = new Map();
+window.addEventListener("eip6963:announceProvider", (e) => { const { info, provider } = e.detail || {}; if (info?.rdns && provider) WALLETS.set(info.rdns, { info, provider }); });
+window.dispatchEvent(new Event("eip6963:requestProvider"));
+function walletList(){ const l = [...WALLETS.values()]; if (!l.length && window.ethereum) l.push({ info:{ rdns:"injected", name:"Browser wallet", icon:"" }, provider: window.ethereum }); return l; }
+function savedWallet(){ try { return localStorage.getItem("lockbox_wallet"); } catch (e) { return null; } }
+function saveWallet(r){ try { r ? localStorage.setItem("lockbox_wallet", r) : localStorage.removeItem("lockbox_wallet"); } catch (e) {} }
+function pickWallet(){
+  return new Promise((resolve) => {
+    const list = walletList(), dlg = $("walletDlg"), box = $("walletList");
+    box.innerHTML = list.length ? list.map((w,i) => {
+      const icon = /^data:image\/(png|svg\+xml|webp|jpeg);/i.test(w.info.icon || "") ? `<img src="${esc(w.info.icon)}" alt="" width="28" height="28">` : `<span class="wicon" aria-hidden="true"></span>`;
+      return `<button class="wbtn" type="button" data-i="${i}">${icon}<span>${esc(w.info.name || "Wallet")}</span></button>`;
+    }).join("") : `<p class="hint" style="margin:0">No wallet found in this browser. Install an EVM wallet such as MetaMask, Trust Wallet, Rabby, OKX or Coinbase Wallet, or open this page in your mobile wallet's browser.</p>`;
+    const done = (w) => { dlg.close(); resolve(w); };
+    box.onclick = (e) => { const b = e.target.closest("button[data-i]"); if (b) done(list[Number(b.dataset.i)]); };
+    $("walletCancel").onclick = () => done(null);
+    dlg.oncancel = () => resolve(null);
+    dlg.showModal();
+  });
+}
+let activeEth = null;
+function attach(eth){
+  if (activeEth === eth) return;
+  if (activeEth?.removeListener) { activeEth.removeListener("accountsChanged", onAccounts); activeEth.removeListener("chainChanged", onChain); }
+  activeEth = eth; eth.on?.("accountsChanged", onAccounts); eth.on?.("chainChanged", onChain);
+}
+function onAccounts(a){ if (!a || !a.length) { saveWallet(null); location.reload(); } else useWallet(activeEth, false); }
+function onChain(){ location.reload(); }
+async function onRightChain(){ if (!S.browser) return false; return Number((await S.browser.getNetwork()).chainId) === CONFIG.chainId; }
+async function switchChain(eth){
+  const hex = "0x" + CONFIG.chainId.toString(16);
+  try { await eth.request({ method:"wallet_switchEthereumChain", params:[{ chainId: hex }] }); }
+  catch (e) {
+    const code = e?.code ?? e?.data?.originalError?.code;
+    if (code === 4902 && CONFIG.rpc) await eth.request({ method:"wallet_addEthereumChain", params:[{ chainId: hex, chainName: CONFIG.chainName, nativeCurrency:{ name:"BOT", symbol:"BOT", decimals:18 }, rpcUrls:[CONFIG.rpc], blockExplorerUrls:[CONFIG.explorer] }] });
+    else if (code === 4902) toast(`Add ${CONFIG.chainName} (chain ID ${CONFIG.chainId}) to your wallet, then try again.`, 9000);
+    else throw e;
+  }
+}
+async function useWallet(eth, ask = true){
+  try {
+    await eth.request({ method: ask ? "eth_requestAccounts" : "eth_accounts" });
+    attach(eth);
+    S.browser = new ethers.BrowserProvider(eth);
+    if (!(await onRightChain())) await switchChain(eth);
+    S.browser = new ethers.BrowserProvider(eth);
+    S.signer = await S.browser.getSigner();
+    S.me = await S.signer.getAddress();
+    if (CONFIG.contract) {
+      S.write = new ethers.Contract(CONFIG.contract, ABI, S.signer);
+      if (!CONFIG.rpc) { S.provider = S.browser; S.read = new ethers.Contract(CONFIG.contract, ABI, S.browser); }
+    }
+    await afterConnect();
+  } catch (e) { toast(errMsg(e), 8000); }
+}
+async function connect(){
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  await new Promise(r => setTimeout(r, 150));
+  const list = walletList();
+  const w = list.length === 1 && !S.me ? list[0] : await pickWallet();
+  if (!w) return;
+  if (S.me && activeEth === w.provider) await w.provider.request({ method:"wallet_requestPermissions", params:[{ eth_accounts:{} }] }).catch(() => {});
+  saveWallet(w.info.rdns);
+  await useWallet(w.provider, true);
+}
+async function afterConnect(){
+  const right = await onRightChain();
+  $("who").innerHTML = right ? `<b>${short(S.me)}</b> on ${CONFIG.chainName}` : `<span class="bad">Wrong network. Switch to ${CONFIG.chainName}.</span>`;
+  $("connect").textContent = "Change wallet"; $("connect").classList.remove("primary"); $("connect").classList.add("quiet");
+  await loadFee();
+  await loadMine();
+  if ($("lToken").value) await loadTok();
+  if (S.pendingCheck) { const q = S.pendingCheck; S.pendingCheck = null; await check(q); }
+}
+async function loadFee(){
+  if (!S.read) return;
+  S.fee = await S.read.lockFee();
+  $("lockHint").textContent = `Locking costs ${ethers.formatEther(S.fee)} BOT plus gas. You can push the unlock date later, but never earlier.`;
+}
+
+// ---------------- tabs ----------------
+const TABS = [["tCheck","pCheck"],["tLock","pLock"],["tMine","pMine"]];
+function show(tab){ for (const [t,p] of TABS){ const on = t === tab; $(t).setAttribute("aria-selected", on); $(p).hidden = !on; } }
+for (const [t] of TABS) $(t).onclick = () => show(t);
+
+// ---------------- shared rendering ----------------
+async function tokenInfo(addr){
+  const t = new ethers.Contract(addr, ERC20, S.provider);
+  const [name, symbol, decimals, supply] = await Promise.all([
+    t.name().catch(() => "Unknown token"), t.symbol().catch(() => "?"), t.decimals().catch(() => 18n), t.totalSupply().catch(() => 0n)]);
+  return { addr, name, symbol, decimals: Number(decimals), supply, c: t };
+}
+function lockCard(id, l, tok, opts = {}){
+  const now = nowS(), start = Number(l.start), unlock = Number(l.unlock);
+  const amount = l.amount, withdrawn = l.withdrawn;
+  const total = Math.max(1, unlock - start);
+  const pctTime = Math.min(100, Math.max(0, ((now - start) / total) * 100));
+  const open = now >= unlock;
+  const vestedPct = open ? 100 : l.linear ? pctTime : 0;
+  const tl = until(unlock);
+  const kind = l.linear ? "Gradual" : "All at once";
+  return `<article class="lock" data-id="${id}">
+    <div class="lock-h">
+      <div><div class="amt">${esc(fmt(amount, tok.decimals))} ${esc(tok.symbol)}</div>${l.label ? `<div class="lbl">${esc(l.label)}</div>` : ""}</div>
+      <span class="kind">${kind}</span>
+    </div>
+    <div class="tl" role="img" aria-label="${open ? "Unlocked" : `${Math.round(pctTime)} percent of lock time elapsed`}">
+      <div class="done" style="width:${vestedPct}%"></div>
+      ${open ? "" : `<div class="now" style="left:calc(${pctTime}% - 1px)" title="Now"></div>`}
+    </div>
+    <div class="tl-l">
+      <span>Locked ${esc(date(start))}</span>
+      <span>${open ? `<span class="state-open">Unlocked</span> ${esc(date(unlock))}` : `Opens <b>${esc(date(unlock))}</b> · in ${tl}`}</span>
+    </div>
+    <div class="tl-l" style="margin-top:4px"><span>Owner ${opts.mine ? "you" : `<a href="${CONFIG.explorer}/address/${esc(l.owner)}" target="_blank" rel="noopener">${short(l.owner)}</a>`}</span>${withdrawn > 0n ? `<span>${esc(fmt(withdrawn, tok.decimals))} withdrawn</span>` : ""}<span>Lock #${id}</span></div>
+    ${opts.actions || ""}
+  </article>`;
+}
+
+// ---------------- check a token ----------------
+async function check(addr){
+  const out = $("checkOut");
+  if (!ethers.isAddress(addr)) { out.innerHTML = `<div class="empty">That isn't a valid address. It should start with 0x and be 42 characters long.</div>`; return; }
+  if (!S.read) { out.innerHTML = `<div class="empty">Connect your wallet to check tokens on ${CONFIG.chainName}.</div>`; return; }
+  out.innerHTML = `<div class="empty">Checking…</div>`;
+  try {
+    const tok = await tokenInfo(addr);
+    const ids = (await S.read.locksOfToken(addr)).map(Number);
+    const locks = await Promise.all(ids.map(async id => ({ id, l: (await S.read.getLock(id)).toObject(), still: await S.read.stillLocked(id) })));
+    let lockedNow = 0n; for (const x of locks) lockedNow += x.still;
+    const pct = tok.supply > 0n ? Number((lockedNow * 1000000n) / tok.supply) / 10000 : 0;
+    const active = locks.filter(x => x.still > 0n);
+    const next = active.length ? Math.min(...active.map(x => Number(x.l.unlock))) : null;
+    const share = `${location.origin}${location.pathname}?token=${addr}`;
+    try { history.replaceState(null, "", `?token=${addr}`); } catch (e) {}
+    out.innerHTML = `
+      <div class="verdict">
+        <div class="big">${pct >= 10 ? pct.toFixed(1) : pct.toFixed(2)}<small>%</small></div>
+        <div class="vmeta"><span class="tokname">${esc(tok.name)} (${esc(tok.symbol)})</span>
+          of the total supply is locked right now: <b>${esc(fmt(lockedNow, tok.decimals))}</b> of ${esc(fmt(tok.supply, tok.decimals))} ${esc(tok.symbol)}.
+          ${next ? `The next lock opens <b>${esc(date(next))}</b>.` : locks.length ? "Every lock on this token has opened." : ""}
+        </div>
+      </div>
+      <p class="hint">This counts only locks in Lockbox. Tokens locked elsewhere won't show here. Share this result: <a class="mono" href="${esc(share)}">${esc(share)}</a></p>
+      ${locks.length ? `<div class="locks">${locks.slice().reverse().map(x => lockCard(x.id, x.l, tok)).join("")}</div>`
+        : `<div class="empty">No Lockbox locks for this token. If a project says its liquidity is locked, ask where, and check there.</div>`}`;
+  } catch (e) { out.innerHTML = `<div class="empty">Couldn't read that token: ${esc(errMsg(e))}</div>`; }
+}
+$("checkForm").onsubmit = (e) => { e.preventDefault(); check($("checkAddr").value.trim()); };
+
+// ---------------- lock tokens ----------------
+async function loadTok(){
+  const a = $("lToken").value.trim(); S.tok = null;
+  $("approveBtn").disabled = true; $("lockBtn").disabled = true;
+  if (!ethers.isAddress(a)) { $("tokBox").textContent = a ? "That isn't a valid address." : ""; return; }
+  if (!S.me) { $("tokBox").textContent = "Connect your wallet to continue."; return; }
+  try {
+    const tok = await tokenInfo(a);
+    const [bal, allow] = await Promise.all([tok.c.balanceOf(S.me), tok.c.allowance(S.me, CONFIG.contract)]);
+    S.tok = { ...tok, bal, allow };
+    $("tokBox").innerHTML = `<b>${esc(tok.name)} (${esc(tok.symbol)})</b> · you have ${esc(fmt(bal, tok.decimals))} ${esc(tok.symbol)}`;
+    updateSteps();
+  } catch (e) { $("tokBox").textContent = "Couldn't read that token. Check the address is an ERC-20 token on BOT Chain."; }
+}
+function amountWei(){ try { return S.tok ? ethers.parseUnits($("lAmt").value || "0", S.tok.decimals) : 0n; } catch { return -1n; } }
+function updateSteps(){
+  const a = amountWei();
+  const ok = S.tok && a > 0n && a <= S.tok.bal;
+  $("approveBtn").disabled = !ok || S.tok.allow >= a;
+  $("lockBtn").disabled = !ok || S.tok.allow < a;
+  $("approveBtn").textContent = ok && S.tok.allow >= a ? "1. Approved" : "1. Approve";
+}
+let tokTimer; $("lToken").addEventListener("input", () => { clearTimeout(tokTimer); tokTimer = setTimeout(loadTok, 300); });
+$("lAmt").addEventListener("input", updateSteps);
+$("maxBtn").onclick = () => { if (S.tok) { $("lAmt").value = ethers.formatUnits(S.tok.bal, S.tok.decimals); updateSteps(); } };
+$("approveBtn").onclick = () => {
+  const a = amountWei(); if (!S.tok || a <= 0n) return;
+  const c = new ethers.Contract(S.tok.addr, ERC20, S.signer);
+  send("Approve", () => c.approve(CONFIG.contract, a), loadTok);
+};
+$("lockForm").onsubmit = (e) => {
+  e.preventDefault();
+  const a = amountWei(); if (!S.tok || a <= 0n) return toast("Enter how many tokens to lock.");
+  const when = Math.floor(new Date($("lDate").value).getTime() / 1000);
+  if (!when || when <= nowS() + 60) return toast("Pick an unlock date in the future.");
+  if (when > nowS() + 3650*86400) return toast("Locks can last up to 10 years.");
+  const linear = document.querySelector('input[name="kind"]:checked').value === "linear";
+  const label = $("lLabel").value.trim();
+  const tokAddr = S.tok.addr;
+  send("Lock", () => S.write.lock(tokAddr, a, when, linear, label, { value: S.fee }), async () => {
+    $("lockForm").reset(); $("tokBox").textContent = ""; S.tok = null; updateSteps();
+    await loadMine();
+    $("checkAddr").value = tokAddr; show("tCheck"); await check(tokAddr);
+  });
+};
+
+// ---------------- my locks ----------------
+const tokCache = new Map();
+async function cachedTok(a){ if (!tokCache.has(a.toLowerCase())) tokCache.set(a.toLowerCase(), await tokenInfo(a)); return tokCache.get(a.toLowerCase()); }
+async function loadMine(){
+  const out = $("mineOut");
+  if (!S.read || !S.me) return;
+  try {
+    const ids = [...new Set((await S.read.locksOfOwner(S.me)).map(Number))];
+    const all = await Promise.all(ids.map(async id => ({ id, l: (await S.read.getLock(id)).toObject(), w: await S.read.withdrawable(id) })));
+    const mine = all.filter(x => same(x.l.owner, S.me) && x.l.withdrawn < x.l.amount);
+    if (!mine.length) { out.innerHTML = `<div class="empty">You don't have any open locks. <button class="btn quiet" type="button" onclick="show('tLock')">Lock tokens</button></div>`; return; }
+    const cards = await Promise.all(mine.slice().reverse().map(async x => {
+      const tok = await cachedTok(x.l.token);
+      const actions = `<div class="acts">
+        <button class="btn primary" data-a="withdraw" ${x.w === 0n ? "disabled" : ""}>${x.w === 0n ? "Nothing to withdraw yet" : `Withdraw ${esc(fmt(x.w, tok.decimals))} ${esc(tok.symbol)}`}</button>
+      </div>
+      <div class="acts"><input class="field" type="datetime-local" data-in="date" aria-label="New unlock date"><button class="btn quiet" data-a="extend">Unlock later</button></div>
+      <div class="acts"><input class="field mono" data-in="to" placeholder="0x… new owner" aria-label="New owner address" spellcheck="false"><button class="btn quiet" data-a="transfer">Transfer lock</button></div>`;
+      return lockCard(x.id, x.l, tok, { mine: true, actions });
+    }));
+    out.innerHTML = `<div class="locks">${cards.join("")}</div>`;
+  } catch (e) { out.innerHTML = `<div class="empty">Couldn't load your locks: ${esc(errMsg(e))}</div>`; }
+}
+$("mineOut").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const card = b.closest(".lock"), id = Number(card.dataset.id), a = b.dataset.a;
+  const val = (k) => card.querySelector(`[data-in="${k}"]`)?.value?.trim();
+  if (a === "withdraw") send("Withdraw", () => S.write.withdraw(id), loadMine);
+  if (a === "extend") {
+    const when = Math.floor(new Date(val("date")).getTime() / 1000);
+    if (!when) return toast("Pick the new unlock date first.");
+    send("Unlock later", () => S.write.extend(id, when), loadMine);
+  }
+  if (a === "transfer") {
+    const to = val("to");
+    if (!ethers.isAddress(to)) return toast("Enter a valid wallet address to transfer to.");
+    if (confirm(`Give lock #${id} to ${short(to)}? Only they will be able to withdraw it.`)) send("Transfer lock", () => S.write.transferLock(id, to), loadMine);
+  }
+});
+
+// ---------------- boot ----------------
+$("connect").onclick = connect;
+(async function boot(){
+  if (CONFIG.contract) { $("contractLink").textContent = short(CONFIG.contract); $("contractLink").href = `${CONFIG.explorer}/address/${CONFIG.contract}`; }
+  else $("contractLi").hidden = true;
+  const q = new URLSearchParams(location.search).get("token");
+  if (q) { $("checkAddr").value = q; S.pendingCheck = q; }
+  if (!CONFIG.contract) { $("checkOut").innerHTML = `<div class="empty">Lockbox isn't deployed yet. Set the contract address in CONFIG.</div>`; return; }
+  if (CONFIG.rpc) { S.provider = new ethers.JsonRpcProvider(CONFIG.rpc, CONFIG.chainId); S.read = new ethers.Contract(CONFIG.contract, ABI, S.provider); await loadFee(); if (q) { S.pendingCheck = null; check(q); } }
+  const saved = savedWallet();
+  if (saved) {
+    await new Promise(r => setTimeout(r, 200));
+    const w = walletList().find(x => x.info.rdns === saved);
+    if (w) { const a = await w.provider.request({ method:"eth_accounts" }).catch(() => []); if (a.length) return useWallet(w.provider, false); }
+  }
+  if (q && !CONFIG.rpc) $("checkOut").innerHTML = `<div class="empty">Connect your wallet to check this token on ${CONFIG.chainName}.</div>`;
+})();
+</script>
+</body>
+</html>
