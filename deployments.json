@@ -1,0 +1,11 @@
+{
+  "botMainnet": {
+    "chainId": 677,
+    "Lockbox": "0x4092c7E6Ae84EBa21201fb7C281851A342d46702",
+    "deployTx": "0x07f81af91bfcfa353cdfae1e6817752004c24be7bb7ac415b8b765c4ca828ace",
+    "owner": "0x3686f4A5cF47DCbaF0cE8eF3bE3F3231dafe5e4f",
+    "treasury": "0x3686f4A5cF47DCbaF0cE8eF3bE3F3231dafe5e4f",
+    "deployer": "0xcC9C1dAC538b7E698C95bAa0C66c345598634CC7",
+    "lockFee": "0.1 BOT"
+  }
+}

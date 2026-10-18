@@ -1,5 +1,8 @@
 # Lockbox — token & liquidity locker on BOT Chain
 
+**Live on BOT Chain mainnet:** [`0x4092c7E6Ae84EBa21201fb7C281851A342d46702`](https://scan.botchain.ai/address/0x4092c7E6Ae84EBa21201fb7C281851A342d46702)
+(deploy tx [`0x07f81af9…`](https://scan.botchain.ai/tx/0x07f81af91bfcfa353cdfae1e6817752004c24be7bb7ac415b8b765c4ca828ace))
+
 Projects lock their tokens or LP tokens until a date so holders can see they can't be pulled.
 Anyone can paste a token address into the site and see what share of its supply is locked,
 in which locks, and when each one opens. Results are shareable as `?token=0x…` links.
