@@ -249,6 +249,7 @@ function errMsg(e){
     NotLockOwner:"Only the wallet that owns this lock can do that.", NothingUnlocked:"Nothing has unlocked yet.", EnforcedPause:"New locks are paused right now.",
     "ERC20InsufficientAllowance":"Approve the tokens first (step 1).", "ERC20InsufficientBalance":"You don't have that many tokens." };
   for (const x in k) if (m.includes(x)) return k[x];
+  if (/missing revert data|execution reverted|CALL_EXCEPTION/i.test(m)) return "The network refused this without giving a reason. Usually the token blocks transfers to contracts (trading off, limits or blacklists), the unlock date is too soon or more than 10 years away, or there isn't enough BOT for the fee plus gas. Nothing was sent.";
   return m.length > 180 ? m.slice(0,180) + "…" : m;
 }
 async function send(label, fn, after){
