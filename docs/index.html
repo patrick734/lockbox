@@ -392,6 +392,8 @@ async function check(addr){
   if (!S.read) { out.innerHTML = `<div class="empty">Connect your wallet to check tokens on ${CONFIG.chainName}.</div>`; return; }
   out.innerHTML = `<div class="empty">Checking…</div>`;
   try {
+    const code = await S.provider.getCode(addr);
+    if (!code || code === "0x") { out.innerHTML = `<div class="empty">${esc(await notTokenReason(addr))}</div>`; return; }
     const tok = await tokenInfo(addr);
     const ids = (await S.read.locksOfToken(addr)).map(Number);
     const locks = await Promise.all(ids.map(async id => ({ id, l: (await S.read.getLock(id)).toObject(), still: await S.read.stillLocked(id) })));
@@ -412,7 +414,7 @@ async function check(addr){
       <p class="hint">This counts only locks in Lockbox. Tokens locked elsewhere won't show here. Share this result: <a class="mono" href="${esc(share)}">${esc(share)}</a></p>
       ${locks.length ? `<div class="locks">${locks.slice().reverse().map(x => lockCard(x.id, x.l, tok)).join("")}</div>`
         : `<div class="empty">No Lockbox locks for this token. If a project says its liquidity is locked, ask where, and check there.</div>`}`;
-  } catch (e) { out.innerHTML = `<div class="empty">Couldn't read that token: ${esc(errMsg(e))}</div>`; }
+  } catch (e) { out.innerHTML = `<div class="empty">${esc(await notTokenReason(addr))}</div>`; }
 }
 $("checkForm").onsubmit = (e) => { e.preventDefault(); check($("checkAddr").value.trim()); };
 
@@ -428,7 +430,15 @@ async function loadTok(){
     S.tok = { ...tok, bal, allow };
     $("tokBox").innerHTML = `<b>${esc(tok.name)} (${esc(tok.symbol)})</b> · you have ${esc(fmt(bal, tok.decimals))} ${esc(tok.symbol)}`;
     updateSteps();
-  } catch (e) { $("tokBox").textContent = "Couldn't read that token. Check the address is an ERC-20 token on BOT Chain."; }
+  } catch (e) { $("tokBox").textContent = await notTokenReason(a); }
+}
+// Explain why an address couldn't be read as a token.
+async function notTokenReason(a){
+  try {
+    const code = await S.provider.getCode(a);
+    if (!code || code === "0x") return "That's a wallet address, not a token. Paste the token's contract address (or the LP token address for liquidity) instead.";
+  } catch (e) {}
+  return "That address is a contract on BOT Chain, but not an ERC-20 token, so it can't be locked.";
 }
 function amountWei(){ try { return S.tok ? ethers.parseUnits($("lAmt").value || "0", S.tok.decimals) : 0n; } catch { return -1n; } }
 function updateSteps(){
